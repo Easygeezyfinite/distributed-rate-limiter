@@ -1,0 +1,37 @@
+# Two copies of the API sharing one Redis, to show that the limit is enforced
+# across servers: requests to port 8001 and 8002 count against the same quota.
+services:
+  redis:
+    image: redis:7-alpine
+    # No host port on purpose: only the API containers need to reach it, and it
+    # would clash with a Redis already running on localhost:6379.
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 2s
+      retries: 10
+
+  api_a:
+    build: .
+    ports:
+      - "8001:8000"
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      RATE_LIMIT: "5"
+      WINDOW_SECONDS: "60"
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  api_b:
+    # Same image as api_a; the second build is all cache hits.
+    build: .
+    ports:
+      - "8002:8000"
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      RATE_LIMIT: "5"
+      WINDOW_SECONDS: "60"
+    depends_on:
+      redis:
+        condition: service_healthy
