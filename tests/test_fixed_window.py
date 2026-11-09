@@ -59,6 +59,30 @@ class TestFixedWindowRateLimiter(unittest.TestCase):
             self.limiter.allow_request("alice")
         self.assertEqual(self.limiter.remaining_requests("alice"), 0)
 
+    def test_new_window_removes_inactive_clients(self):
+        for client in range(1000):
+            self.limiter.allow_request(str(client))
+        self.clock.advance(10)
+        self.assertTrue(self.limiter.allow_request("new-client"))
+        self.assertEqual(set(self.limiter.counts_by_client), {"new-client"})
+
+    def test_quota_lookup_also_removes_expired_clients_after_idle_time(self):
+        self.limiter.allow_request("alice")
+        self.clock.advance(35)
+        self.assertEqual(self.limiter.remaining_requests("bob"), 3)
+        self.assertEqual(self.limiter.counts_by_client, {})
+
+    def test_cleanup_does_not_reset_current_window_quota(self):
+        self.limiter.allow_request("old-client")
+        self.clock.advance(10)
+        for _ in range(3):
+            self.assertTrue(self.limiter.allow_request("alice"))
+        self.clock.advance(9.9)
+        self.assertEqual(self.limiter.remaining_requests("bob"), 3)
+        self.assertFalse(self.limiter.allow_request("alice"))
+        self.assertEqual(self.limiter.remaining_requests("alice"), 0)
+        self.assertNotIn("old-client", self.limiter.counts_by_client)
+
     def test_boundary_burst_is_allowed(self):
         # Known weakness of fixed windows: a client can send `limit` requests at
         # the very end of one window and `limit` more at the start of the next,

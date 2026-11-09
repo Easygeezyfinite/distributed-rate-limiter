@@ -194,4 +194,6 @@ Redis for my macOS setup and started compiling LLVM and Rust from source.
   event loop.
 - Behind a proxy or load balancer, every request has the proxy's IP, so clients without
   an API key would share one limit. Reading `X-Forwarded-For` from a trusted proxy would fix that.
-- The in-memory limiter never removes old clients from memory.
+- The in-memory limiter clears expired clients on the first request or quota lookup
+  in a new window. It retains them while idle, and memory use can still grow with
+  the number of distinct clients within one window.

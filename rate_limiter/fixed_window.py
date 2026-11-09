@@ -21,6 +21,7 @@ class FixedWindowRateLimiter:
         self.clock = clock
         # client_id -> (start time of the client's current window, requests counted in it)
         self.counts_by_client = {}
+        self.counts_window_start = None
         # allow_request reads a count, checks it, then writes it back. If two threads
         # do that at the same time they can both read the same old count and both get
         # let through. The lock makes the read-check-write happen as one step.
@@ -32,10 +33,20 @@ class FixedWindowRateLimiter:
         # e.g. window=60, now=125 -> 125 // 60 = 2 -> window starts at 120
         return (now // self.window_seconds) * self.window_seconds
 
+    def _prepare_window(self):
+        """Drop expired counts. The caller must hold self.lock."""
+        window_start = self._current_window_start()
+        if self.counts_window_start != window_start:
+            # Every client uses the same buckets, so all saved counts expire together.
+            # Clear once per window instead of scanning every client on every request.
+            self.counts_by_client.clear()
+            self.counts_window_start = window_start
+        return window_start
+
     def allow_request(self, client_id):
         """Return True if this request is allowed, False if the client is over the limit."""
         with self.lock:
-            window_start = self._current_window_start()
+            window_start = self._prepare_window()
             saved_window_start, request_count = self.counts_by_client.get(
                 client_id, (window_start, 0)
             )
@@ -55,7 +66,7 @@ class FixedWindowRateLimiter:
     def remaining_requests(self, client_id):
         """How many more requests the client can make in the current window."""
         with self.lock:
-            window_start = self._current_window_start()
+            window_start = self._prepare_window()
             saved_window_start, request_count = self.counts_by_client.get(
                 client_id, (window_start, 0)
             )
