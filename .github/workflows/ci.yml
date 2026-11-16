@@ -1,0 +1,39 @@
+name: ci
+
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    # Real Redis 7 so the Redis tests actually run instead of skipping.
+    services:
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements.txt
+      - name: Check Redis is reachable
+        run: python -c "import redis; print(redis.Redis(host='localhost', port=6379).ping())"
+      # shell: bash turns on pipefail, so a failing test still fails the step through tee.
+      - name: Run tests
+        shell: bash
+        run: python -m unittest discover -s tests -v 2>&1 | tee test-output.txt
+      # Skipped tests would hide a broken Redis setup, so treat any skip as a failure in CI.
+      - name: Fail if any test was skipped
+        run: |
+          if grep -q "skipped=" test-output.txt; then
+            echo "Some tests were skipped in CI"
+            exit 1
+          fi

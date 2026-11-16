@@ -117,6 +117,26 @@ docker compose down
 The compose Redis doesn't publish a port, so it doesn't clash with a Redis already
 running on `localhost:6379`.
 
+## Load test against real Redis
+
+`benchmarks/load_test_limiter.py` starts 4 processes (each one standing in for an API
+server with its own Redis connection pool) with 8 threads each, all calling
+`allow_request()` as fast as they can. It measures the limiter's decision path, one
+`MULTI`/`EXEC` round trip to Redis, not full HTTP through FastAPI.
+
+Results from a run on Nov 12, 2026 (Redis 7, 2 vCPU Linux machine):
+
+| test | result |
+|------|--------|
+| throughput, 1,000 clients, limit never hit | ~20,300 decisions/s, p95 3.9 ms (median of 3 runs) |
+| correctness, all 32 threads on ONE client key | allowed exactly the limit in 6/6 runs (limits 100, 1,000, 5,000) |
+| over-admissions | 0 across ~359K concurrent requests |
+
+One earlier run let 2,000 through with a limit of 1,000. That run crossed a window
+boundary, which is the known fixed-window burst, not a race, so the script waits
+until it's well inside a window before each correctness run.
+Full tables and steps to reproduce are in [benchmarks/RESULTS.md](benchmarks/RESULTS.md).
+
 ## Project layout
 
 ```
@@ -130,6 +150,9 @@ tests/
   test_redis_fixed_window.py tests against a fake Redis, plus real-Redis tests
   test_middleware.py         middleware tests (plain asyncio, no FastAPI needed)
   test_app.py                HTTP tests through FastAPI's TestClient
+benchmarks/
+  load_test_limiter.py       multi-process load + correctness test against real Redis
+  RESULTS.md                 measured results
 Dockerfile
 docker-compose.yml
 requirements.txt
@@ -150,6 +173,9 @@ The real-Redis tests need a server on `localhost:6379` (see the setup below), an
 `test_app.py` needs the packages from `requirements.txt`. Without them those tests are
 skipped and everything else still runs. `REDIS_HOST` and `REDIS_PORT`
 override the address.
+
+On GitHub, `.github/workflows/ci.yml` runs the whole suite on every push against a
+real Redis 7 service container, and fails the build if any test is skipped.
 
 ## Setup for the Redis and Docker stages (macOS)
 
