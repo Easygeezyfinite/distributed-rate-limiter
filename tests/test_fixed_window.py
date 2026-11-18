@@ -73,6 +73,13 @@ class TestFixedWindowRateLimiter(unittest.TestCase):
         self.clock.advance(23)
         self.assertEqual(self.limiter.seconds_until_reset(), 7)
 
+    def test_reset_countdown_restarts_at_window_boundary(self):
+        self.clock.advance(9.5)
+        self.assertEqual(self.limiter.seconds_until_reset(), 0.5)
+
+        self.clock.advance(0.5)
+        self.assertEqual(self.limiter.seconds_until_reset(), 10)
+
     def test_rejects_invalid_settings(self):
         with self.assertRaises(ValueError):
             FixedWindowRateLimiter(limit=0, window_seconds=10)
