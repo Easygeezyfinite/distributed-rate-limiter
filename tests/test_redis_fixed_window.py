@@ -195,6 +195,18 @@ class TestRedisLimiterWithFakeRedis(unittest.TestCase):
         ]
         self.assertEqual(results, [True, True, True, False])
 
+    def test_key_prefixes_isolate_quotas_on_shared_redis(self):
+        other_limiter = RedisFixedWindowRateLimiter(
+            self.fake_redis, limit=3, window_seconds=10,
+            key_prefix="other_service", clock=self.clock,
+        )
+        for _ in range(3):
+            self.assertTrue(self.limiter.allow_request("alice"))
+
+        self.assertFalse(self.limiter.allow_request("alice"))
+        self.assertTrue(other_limiter.allow_request("alice"))
+        self.assertEqual(other_limiter.remaining_requests("alice"), 2)
+
     def test_remaining_requests(self):
         self.assertEqual(self.limiter.remaining_requests("alice"), 3)
         self.limiter.allow_request("alice")
