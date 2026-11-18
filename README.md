@@ -71,6 +71,10 @@ the count before deciding what to do: `EXPIRE ... NX` removed the old
 - If Redis can't be reached the middleware lets requests through and logs an error
   (fail open), so a Redis outage doesn't take the API down with it.
 
+The demo uses the supplied API key as a quota identifier without authenticating
+it. In a deployment with authenticated clients, use the verified client identity
+to select the quota bucket.
+
 Settings are environment variables: `RATE_LIMIT` (default 10), `WINDOW_SECONDS`
 (default 60) and `REDIS_URL`. Without `REDIS_URL` counts are kept in memory.
 
