@@ -51,7 +51,7 @@ class RateLimitMiddleware:
             # If Redis is down, fail open: let the request through and log it. Taking
             # the whole API down because the limiter's storage is down seemed worse
             # than briefly not limiting.
-            logger.exception("rate limiter failed, allowing request from %s", client_id)
+            logger.exception("rate limiter failed, allowing request")
             allowed = True
 
         if allowed:

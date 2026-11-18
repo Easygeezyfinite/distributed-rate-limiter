@@ -162,9 +162,11 @@ class TestRateLimitMiddleware(unittest.TestCase):
 
     def test_fails_open_when_limiter_storage_is_down(self):
         middleware = RateLimitMiddleware(ok_app, limiter=BrokenLimiter())
-        with self.assertLogs("rate_limiter.middleware", level="ERROR"):
-            status, _, _ = call(middleware, make_scope())
+        with self.assertLogs("rate_limiter.middleware", level="ERROR") as logs:
+            status, _, _ = call(middleware, make_scope(api_key="private-key"))
         self.assertEqual(status, 200)
+        self.assertIn("rate limiter failed", logs.output[0])
+        self.assertNotIn("private-key", logs.output[0])
 
 
 if __name__ == "__main__":
